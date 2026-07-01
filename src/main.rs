@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 use clap::Parser;
 use serde_json::json;
 
@@ -16,9 +16,16 @@ use crate::config::Config;
 use crate::specs::SpecsResponse;
 
 #[derive(Parser, Debug)]
-#[command(name = "sprout", version, about = "Hardware-info probe for LettuceAI runnability checks")]
+#[command(
+    name = "sprout",
+    version,
+    about = "Hardware-info probe for LettuceAI runnability checks"
+)]
 struct Args {
-    #[arg(long, help = "Path to the config file (created on first run if missing)")]
+    #[arg(
+        long,
+        help = "Path to the config file (created on first run if missing)"
+    )]
     config: Option<PathBuf>,
 }
 
@@ -39,12 +46,13 @@ async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     let state = Arc::new(config);
 
-    let protected = Router::new()
-        .route("/specs", get(specs))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            require_bearer,
-        ));
+    let protected =
+        Router::new()
+            .route("/specs", get(specs))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                require_bearer,
+            ));
 
     let app = Router::new()
         .route("/health", get(health))

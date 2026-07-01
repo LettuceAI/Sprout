@@ -1,7 +1,7 @@
 use serde::Serialize;
 use sysinfo::System;
 
-use crate::gpu::{collect_gpus, GpuDevice};
+use crate::gpu::{GpuDevice, collect_gpus};
 
 pub const SCHEMA_VERSION: u32 = 1;
 

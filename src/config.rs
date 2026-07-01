@@ -87,8 +87,8 @@ fn restrict_permissions(_path: &Path) -> anyhow::Result<()> {
 }
 
 pub fn generate_api_key() -> String {
-    use rand::distr::Alphanumeric;
     use rand::Rng;
+    use rand::distr::Alphanumeric;
     rand::rng()
         .sample_iter(Alphanumeric)
         .take(32)

@@ -41,11 +41,20 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
       - name: Package (unix)
         if: runner.os != 'Windows'
-        run: tar -C target/${{ matrix.target }}/release -czf ${{ matrix.asset }} sprout
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/sprout dist/
+          cp packaging/bundle/install.sh dist/
+          chmod +x dist/sprout dist/install.sh
+          tar -C dist -czf ${{ matrix.asset }} .
       - name: Package (windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path target/${{ matrix.target }}/release/sprout.exe -DestinationPath ${{ matrix.asset }}
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/sprout.exe dist/
+          Copy-Item packaging/bundle/install.cmd dist/
+          Compress-Archive -Path dist/* -DestinationPath ${{ matrix.asset }}
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:

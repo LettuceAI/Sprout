@@ -1,24 +1,21 @@
 use std::ffi::CStr;
 
 use ash::vk;
-use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GpuDevice {
+const NVIDIA_VENDOR_ID: u32 = 0x10DE;
+
+pub(super) struct VulkanDevice {
     pub index: usize,
-    pub name: String,
+    pub vendor_id: u32,
     pub description: String,
-    pub vendor: String,
-    pub backend: String,
+    pub device_type: &'static str,
     pub memory_total: u64,
     pub memory_free: u64,
-    pub device_type: String,
 }
 
-pub fn collect_gpus() -> Vec<GpuDevice> {
-    match unsafe { enumerate_vulkan() } {
-        Ok(gpus) => gpus,
+pub(super) fn devices() -> Vec<VulkanDevice> {
+    match unsafe { enumerate() } {
+        Ok(devices) => devices,
         Err(err) => {
             tracing::warn!("vulkan gpu enumeration unavailable: {err}");
             Vec::new()
@@ -26,7 +23,7 @@ pub fn collect_gpus() -> Vec<GpuDevice> {
     }
 }
 
-unsafe fn enumerate_vulkan() -> anyhow::Result<Vec<GpuDevice>> {
+unsafe fn enumerate() -> anyhow::Result<Vec<VulkanDevice>> {
     unsafe {
         let entry = ash::Entry::load()?;
 
@@ -47,10 +44,10 @@ unsafe fn enumerate_vulkan() -> anyhow::Result<Vec<GpuDevice>> {
 
         let mut out = Vec::new();
         match instance.enumerate_physical_devices() {
-            Ok(devices) => {
-                for pd in devices {
-                    if let Some(gpu) = describe_device(&instance, pd, api_version, out.len()) {
-                        out.push(gpu);
+            Ok(physical_devices) => {
+                for pd in physical_devices {
+                    if let Some(device) = describe_device(&instance, pd, api_version, out.len()) {
+                        out.push(device);
                     }
                 }
             }
@@ -67,9 +64,13 @@ unsafe fn describe_device(
     pd: vk::PhysicalDevice,
     api_version: u32,
     index: usize,
-) -> Option<GpuDevice> {
+) -> Option<VulkanDevice> {
     unsafe {
         let props = instance.get_physical_device_properties(pd);
+
+        if props.vendor_id == NVIDIA_VENDOR_ID {
+            return None;
+        }
 
         let device_type = match props.device_type {
             vk::PhysicalDeviceType::DISCRETE_GPU => "Gpu",
@@ -82,17 +83,15 @@ unsafe fn describe_device(
         let description = CStr::from_ptr(props.device_name.as_ptr())
             .to_string_lossy()
             .into_owned();
-        let (total, free) = device_memory(instance, pd, api_version);
+        let (memory_total, memory_free) = device_memory(instance, pd, api_version);
 
-        Some(GpuDevice {
+        Some(VulkanDevice {
             index,
-            name: format!("Vulkan{index}"),
+            vendor_id: props.vendor_id,
             description,
-            vendor: vendor_name(props.vendor_id).to_string(),
-            backend: "Vulkan".to_string(),
-            memory_total: total,
-            memory_free: free,
-            device_type: device_type.to_string(),
+            device_type,
+            memory_total,
+            memory_free,
         })
     }
 }
@@ -145,17 +144,5 @@ unsafe fn device_supports_budget(instance: &ash::Instance, pd: vk::PhysicalDevic
         };
         exts.iter()
             .any(|ext| CStr::from_ptr(ext.extension_name.as_ptr()) == ash::ext::memory_budget::NAME)
-    }
-}
-
-fn vendor_name(vendor_id: u32) -> &'static str {
-    match vendor_id {
-        0x10DE => "nvidia",
-        0x1002 | 0x1022 => "amd",
-        0x8086 => "intel",
-        0x13B5 => "arm",
-        0x5143 => "qualcomm",
-        0x1010 => "imgtec",
-        _ => "other",
     }
 }

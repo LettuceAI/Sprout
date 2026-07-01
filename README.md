@@ -2,7 +2,7 @@
 
 Sprout is a small HTTP service that reports a machine's GPUs, VRAM, memory, and CPU. LettuceAI queries it to work out which models a remote or headless machine can run, and how to spread them across multiple GPUs.
 
-GPU detection goes through Vulkan, so NVIDIA, AMD, and Intel are handled by one path with no vendor SDKs and no llama.cpp build. Sprout is a single binary of a few megabytes whose only runtime requirement is the Vulkan loader that ships with every GPU driver.
+GPU detection is per vendor: NVIDIA through NVML (reported as `CUDA`), AMD and Intel through Vulkan, and Apple through Metal on macOS. None of these need a vendor SDK or a llama.cpp build; they rely only on the driver libraries already present on the machine. Sprout is a single binary of a few megabytes.
 
 ## Installation
 
@@ -56,7 +56,7 @@ Sprout serves three routes. `GET /ping` returns its name and version for discove
 }
 ```
 
-Every memory value is in bytes. When no Vulkan loader is present the `gpus` list is empty and the rest of the report still works.
+Every memory value is in bytes. Each vendor is probed independently, so a GPU whose driver is missing is simply omitted; a machine with no detectable GPU reports an empty `gpus` list and the rest of the report still works.
 
 ## Running as a service
 

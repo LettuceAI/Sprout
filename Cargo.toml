@@ -7,7 +7,6 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.103"
-ash = "0.38.0"
 axum = "0.8.9"
 clap = { version = "4.6.1", features = ["derive"] }
 dirs = "6.0.0"
@@ -19,6 +18,13 @@ toml = "0.8.0"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net"] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+ash = "0.38.0"
+nvml-wrapper = "0.12.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.33.0"
 
 [profile.release]
 strip = true

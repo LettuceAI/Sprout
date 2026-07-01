@@ -60,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(protected);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!("config: {}", config_path.display());
     tracing::info!("sprout listening on http://{addr}");
     if !state.require_auth {
         tracing::warn!("auth disabled: /specs is served without a bearer token");

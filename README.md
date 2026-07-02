@@ -100,9 +100,14 @@ host = "127.0.0.1"
 port = 8477
 api_key = "..."
 require_auth = true
+# Optional TLS. Relative paths are resolved from this config file.
+# tls_cert_path = "server.crt"
+# tls_key_path = "server.key"
 ```
 
 Set `host` to `0.0.0.0` to accept connections from other machines. Clearing `api_key` regenerates it on the next start, and setting `require_auth` to `false` serves `/specs` without a token. The file is created with `600` permissions because it holds the key; restart Sprout after editing it.
+
+To serve HTTPS directly, set both `tls_cert_path` and `tls_key_path` to PEM-encoded certificate-chain and private-key files. Both values are required when TLS is enabled. LettuceAI then connects using an `https://` Sprout URL and validates certificates issued by a trusted public CA.
 
 ## License
 

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::{Json, Router, routing::get};
+use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use serde_json::json;
 
@@ -44,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
+    let tls_paths = config.tls_paths(&config_path)?;
     let state = Arc::new(config);
 
     let protected =
@@ -59,13 +61,21 @@ async fn main() -> anyhow::Result<()> {
         .route("/ping", get(ping))
         .merge(protected);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("config: {}", config_path.display());
-    tracing::info!("sprout listening on http://{addr}");
     if !state.require_auth {
         tracing::warn!("auth disabled: /specs is served without a bearer token");
     }
-    axum::serve(listener, app).await?;
+    if let Some((cert_path, key_path)) = tls_paths {
+        let tls = RustlsConfig::from_pem_file(&cert_path, &key_path).await?;
+        tracing::info!("sprout listening on https://{addr}");
+        axum_server::bind_rustls(addr, tls)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        tracing::info!("sprout listening on http://{addr}");
+        axum::serve(listener, app).await?;
+    }
     Ok(())
 }
 

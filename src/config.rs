@@ -13,6 +13,10 @@ pub struct Config {
     pub api_key: String,
     #[serde(default = "default_require_auth")]
     pub require_auth: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls_cert_path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls_key_path: Option<PathBuf>,
 }
 
 fn default_host() -> String {
@@ -34,6 +38,8 @@ impl Default for Config {
             port: default_port(),
             api_key: generate_api_key(),
             require_auth: default_require_auth(),
+            tls_cert_path: None,
+            tls_key_path: None,
         }
     }
 }
@@ -54,11 +60,47 @@ pub fn load_or_create(path: &Path) -> anyhow::Result<(Config, bool)> {
             generated = true;
             save(path, &config)?;
         }
+        config.validate()?;
         Ok((config, generated))
     } else {
         let config = Config::default();
         save(path, &config)?;
+        config.validate()?;
         Ok((config, true))
+    }
+}
+
+impl Config {
+    pub fn tls_paths(&self, config_path: &Path) -> anyhow::Result<Option<(PathBuf, PathBuf)>> {
+        match (&self.tls_cert_path, &self.tls_key_path) {
+            (None, None) => Ok(None),
+            (Some(cert), Some(key))
+                if !cert.as_os_str().is_empty() && !key.as_os_str().is_empty() =>
+            {
+                let base = config_path.parent().unwrap_or_else(|| Path::new("."));
+                let resolve = |path: &Path| {
+                    if path.is_absolute() {
+                        path.to_path_buf()
+                    } else {
+                        base.join(path)
+                    }
+                };
+                Ok(Some((resolve(cert), resolve(key))))
+            }
+            _ => anyhow::bail!("tls_cert_path and tls_key_path must both be configured"),
+        }
+    }
+
+    fn validate(&self) -> anyhow::Result<()> {
+        match (&self.tls_cert_path, &self.tls_key_path) {
+            (None, None) => Ok(()),
+            (Some(cert), Some(key))
+                if !cert.as_os_str().is_empty() && !key.as_os_str().is_empty() =>
+            {
+                Ok(())
+            }
+            _ => anyhow::bail!("tls_cert_path and tls_key_path must both be configured"),
+        }
     }
 }
 
@@ -94,4 +136,35 @@ pub fn generate_api_key() -> String {
         .take(32)
         .map(char::from)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_tls_certificate_and_key_together() {
+        let config = Config {
+            tls_cert_path: Some(PathBuf::from("certs/server.crt")),
+            tls_key_path: Some(PathBuf::from("certs/server.key")),
+            ..Config::default()
+        };
+
+        let paths = config
+            .tls_paths(Path::new("/etc/sprout/config.toml"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(paths.0, PathBuf::from("/etc/sprout/certs/server.crt"));
+        assert_eq!(paths.1, PathBuf::from("/etc/sprout/certs/server.key"));
+    }
+
+    #[test]
+    fn rejects_incomplete_tls_configuration() {
+        let config = Config {
+            tls_cert_path: Some(PathBuf::from("server.crt")),
+            ..Config::default()
+        };
+
+        assert!(config.tls_paths(Path::new("config.toml")).is_err());
+    }
 }
